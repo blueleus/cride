@@ -7,11 +7,17 @@ from rest_framework.generics import get_object_or_404
 # Models
 from cride.circles.models import Circle, Membership
 
+# Permissions
+from rest_framework.permissions import IsAuthenticated
+from cride.circles.permissions.memberships import IsActiveCircleMember
+
 # Serializers
 from cride.circles.serializers import MembershipModelSerializer
 
 
 class MembershipViewSet(mixins.ListModelMixin,
+                        mixins.RetrieveModelMixin,
+                        mixins.DestroyModelMixin,
                         viewsets.GenericViewSet):
     """Circle membership view set."""
 
@@ -30,3 +36,22 @@ class MembershipViewSet(mixins.ListModelMixin,
             circle=self.circle,
             is_active=True
         )
+
+    def get_permissions(self):
+        """Assign permissions based on action."""
+        permissions = [IsAuthenticated, IsActiveCircleMember]
+        return [p() for p in permissions]
+
+    def get_object(self):
+        """Return the circle member by using the user's username."""
+        return get_object_or_404(
+            Membership,
+            user__username=self.kwargs['pk'],
+            circle=self.circle,
+            is_active=True
+        )
+
+    def perform_destroy(self, instance):
+        """Disable membership."""
+        instance.is_active = False
+        instance.save()
