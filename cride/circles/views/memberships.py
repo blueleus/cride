@@ -9,7 +9,10 @@ from cride.circles.models import Circle, Membership
 
 # Permissions
 from rest_framework.permissions import IsAuthenticated
-from cride.circles.permissions.memberships import IsActiveCircleMember
+from cride.circles.permissions.memberships import (
+    IsActiveCircleMember,
+    IsAdminOrMembershipOwner
+)
 
 # Serializers
 from cride.circles.serializers import MembershipModelSerializer
@@ -40,6 +43,8 @@ class MembershipViewSet(mixins.ListModelMixin,
     def get_permissions(self):
         """Assign permissions based on action."""
         permissions = [IsAuthenticated, IsActiveCircleMember]
+        if self.action == 'destroy':
+            permissions.append(IsAdminOrMembershipOwner)
         return [p() for p in permissions]
 
     def get_object(self):

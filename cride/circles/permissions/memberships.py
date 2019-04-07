@@ -25,3 +25,26 @@ class IsActiveCircleMember(BasePermission):
         except Membership.DoesNotExist:
             return False
         return True
+
+
+class IsAdminOrMembershipOwner(BasePermission):
+    """
+    Allow accese only to (Circle's admin) or users
+    that are owner of the membership (object).
+    """
+
+    def has_permission(self, request, view):
+        membership = view.get_object()
+        if membership.user == request.user:
+            return True
+
+        try:
+            Membership.objects.get(
+                circle=view.circle,
+                user=request.user,
+                is_active=True,
+                is_admin=True
+            )
+        except Membership.DoesNotExist:
+            return False
+        return True
