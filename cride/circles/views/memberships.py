@@ -3,15 +3,18 @@
 # Django REST Framework
 from rest_framework import mixins, viewsets
 from rest_framework.generics import get_object_or_404
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 # Models
-from cride.circles.models import Circle, Membership
+from cride.circles.models import Circle, Membership, Invitation
 
 # Permissions
 from rest_framework.permissions import IsAuthenticated
 from cride.circles.permissions.memberships import (
     IsActiveCircleMember,
-    IsAdminOrMembershipOwner
+    IsAdminOrMembershipOwner,
+    IsSelfMember
 )
 
 # Serializers
@@ -45,6 +48,8 @@ class MembershipViewSet(mixins.ListModelMixin,
         permissions = [IsAuthenticated, IsActiveCircleMember]
         if self.action == 'destroy':
             permissions.append(IsAdminOrMembershipOwner)
+        if self.action == 'invitations':
+            permissions.append(IsSelfMember)
         return [p() for p in permissions]
 
     def get_object(self):
@@ -60,3 +65,48 @@ class MembershipViewSet(mixins.ListModelMixin,
         """Disable membership."""
         instance.is_active = False
         instance.save()
+
+    @action(detail=True, methods=['get'])
+    def invitations(self, request, *args, **kwargs):
+        """Retrieve a member's invitations breakdown.
+
+        Will return a list containing all the members that have
+        used its invitations and another list containing the
+        invitations that haven't being used yet.
+        """
+
+        member = self.get_object()
+        invited_members = Membership.objects.filter(
+            circle=self.circle,
+            invited_by=request.user,
+            is_active=True
+        )
+
+        # Example:
+        # < QuerySet[('S-O2GXX7Y7',), ('O-6RTWW2ON',)] >
+        unused_invitations = Invitation.objects.filter(
+            circle=self.circle,
+            issued_by=request.user,
+            used=False
+        ).values_list('code')
+        diff = member.remaining_invitations - len(unused_invitations)
+
+        # Example
+        # ['S-O2GXX7Y7', 'O-6RTWW2ON']
+        invitations = [x[0] for x in unused_invitations]
+
+        # IF remaining_invitations is greater than unused_invitations
+        # then create the ones that are needed.
+        for i in range(0, diff):
+            invitations.append(
+                Invitation.objects.create(
+                    issued_by=request.user,
+                    circle=self.circle
+                ).code
+            )
+
+        data = {
+            'used_invitations': MembershipModelSerializer(invited_members, many=True).data,
+            'invitations': invitations
+        }
+        return Response(data)
