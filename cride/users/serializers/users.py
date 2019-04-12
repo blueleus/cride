@@ -21,7 +21,6 @@ from cride.taskapp.tasks import send_confirmation_email
 
 # Utilities
 import jwt
-from datetime import timedelta
 
 
 class UserModelSerializer(serializers.ModelSerializer):
