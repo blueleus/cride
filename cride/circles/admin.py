@@ -2,18 +2,23 @@
 
 # Django
 from django.contrib import admin
-from django.urls import path
-from django.shortcuts import render
+from django.http import HttpResponse
 
 # Models
 from cride.circles.models import Circle
+from cride.rides.models import Ride
 
 # Forms
 from .forms import UploadFileForm
 
 # Utilities
+# Utilities
 import csv
+from django.utils import timezone
+from datetime import datetime, timedelta
 from io import TextIOWrapper
+from django.urls import path
+from django.shortcuts import render
 
 
 @admin.register(Circle)
@@ -35,7 +40,7 @@ class CircleAdmin(admin.ModelAdmin):
         'is_limited'
     )
 
-    actions = ['make_verified', 'make_unverified']
+    actions = ['make_verified', 'make_unverified', 'download_todays_rides']
 
     def make_verified(self, request, queryset):
         """Make circles verified."""
@@ -74,3 +79,41 @@ class CircleAdmin(admin.ModelAdmin):
         for row in reader:
             circle = Circle(**row)
             circle.save()
+
+    def download_todays_rides(self, request, queryset):
+        """Return today's rides."""
+        now = timezone.now()
+        start = datetime(now.year, now.month, now.day, 0, 0, 0)
+        end = start + timedelta(days=1)
+        rides = Ride.objects.filter(
+            offered_in__in=queryset.values_list('id'),
+            departure_date__gte=start,
+            departure_date__lte=end
+        ).order_by('departure_date')
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="rides.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'id',
+            'passengers',
+            'departure_location',
+            'departure_date',
+            'arrival_location',
+            'arrival_date',
+            'rating',
+        ])
+        for ride in rides:
+            writer.writerow([
+                ride.pk,
+                ride.passengers.count(),
+                ride.departure_location,
+                str(ride.departure_date),
+                ride.arrival_location,
+                str(ride.arrival_date),
+                ride.rating,
+            ])
+
+        return response
+
+    download_todays_rides.short_description = 'Download todays rides'
